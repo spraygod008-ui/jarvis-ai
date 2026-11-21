@@ -1,0 +1,141 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JARVIS AI Assistant</title>
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;background:#050b16;color:#d9f6ff;
+ font-family:Arial,sans-serif;min-height:100vh;
+ display:flex;align-items:center;justify-content:center;
+}
+.app{width:95%;max-width:850px;text-align:center;padding:25px}
+h1{font-size:42px;letter-spacing:8px;color:#51dfff}
+.status{color:#79b8cc}
+.core{
+ width:190px;height:190px;border-radius:50%;
+ margin:35px auto;border:3px solid #26cfff;
+ box-shadow:0 0 25px #079bcf,inset 0 0 30px #079bcf;
+ display:grid;place-items:center;
+ animation:pulse 2s infinite;
+}
+.core span{font-size:65px;color:#5ceaff}
+@keyframes pulse{
+ 50%{box-shadow:0 0 55px #00cfff,inset 0 0 45px #00cfff}
+}
+button{
+ background:#087fa5;color:white;border:1px solid #39dfff;
+ padding:13px 20px;border-radius:9px;
+ cursor:pointer;margin:6px;font-size:15px
+}
+button:hover{background:#07546e}
+input{
+ width:70%;padding:14px;border-radius:8px;
+ border:1px solid #39dfff;background:#101e30;color:white
+}
+.chat{
+ text-align:left;background:#0c1929;border:1px solid #164a65;
+ padding:18px;border-radius:12px;min-height:100px;
+ margin:25px 0;line-height:1.6
+}
+#messages{max-height:240px;overflow:auto}
+.small{font-size:12px;color:#82a9ba}
+</style>
+</head>
+<body>
+<div class="app">
+<h1>JARVIS</h1>
+<p class="status">PERSONAL AI ASSISTANT | ONLINE</p>
+<div class="core"><span>◉</span></div>
+<p id="status">Systems Ready</p>
+
+<div class="chat" id="messages">
+<b>JARVIS:</b> Hello! I am JARVIS. How can I help you?
+<br>नमस्ते! मैं आपकी क्या मदद कर सकता हूँ?
+</div>
+
+<input id="question" placeholder="Ask JARVIS / JARVIS से पूछें...">
+<br>
+<button onclick="sendMessage()">Send Message</button>
+<button onclick="startVoice()">🎤 Speak</button>
+<button onclick="speakReply()">🔊 Repeat Reply</button>
+<p class="small">Voice recognition availability depends on your browser.</p>
+</div>
+
+<script>
+let lastReply = "Hello! I am JARVIS. How can I help you?";
+
+function addMessage(sender,message){
+ const box=document.getElementById("messages");
+ box.innerHTML += `<p><b>${sender}:</b> ${escapeHTML(message)}</p>`;
+ box.scrollTop=box.scrollHeight;
+}
+
+function escapeHTML(s){
+ return String(s).replace(/[&<>"']/g,c=>({
+ "&":"&amp;","<":"&lt;",">":"&gt;",
+ '"':"&quot;","'":"&#39;"
+ })[c]);
+}
+
+function replyTo(text){
+ const t=text.toLowerCase();
+ if(/hello|hi|नमस्ते|हेलो/.test(t))
+ return "Hello! नमस्ते! मैं JARVIS हूँ।";
+ if(/name|नाम/.test(t))
+ return "My name is JARVIS. मेरा नाम JARVIS है।";
+ if(/time|समय/.test(t))
+ return "Your current device time is "+new Date().toLocaleTimeString();
+ if(/date|तारीख/.test(t))
+ return "Today's date is "+new Date().toLocaleDateString();
+ if(/help|मदद/.test(t))
+ return "I am ready to help. आप मुझसे समय, तारीख और सामान्य बातचीत कर सकते हैं।";
+ return "I received your message: "+text+". मेरा AI brain अभी connect नहीं हुआ है।";
+}
+
+function sendMessage(){
+ const input=document.getElementById("question");
+ const text=input.value.trim();
+ if(!text)return;
+ addMessage("YOU",text);
+ lastReply=replyTo(text);
+ addMessage("JARVIS",lastReply);
+ input.value="";
+ speakReply();
+}
+
+function speakReply(){
+ if(!("speechSynthesis" in window))return;
+ speechSynthesis.cancel();
+ const utterance=new SpeechSynthesisUtterance(lastReply);
+ utterance.lang=/[\u0900-\u097F]/.test(lastReply)?"hi-IN":"en-US";
+ speechSynthesis.speak(utterance);
+}
+
+function startVoice(){
+ const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+ if(!SpeechRecognition){
+ alert("Voice recognition is not supported in this browser. Try Chrome.");
+ return;
+ }
+ const recognition=new SpeechRecognition();
+ recognition.lang="hi-IN";
+ recognition.onstart=()=>document.getElementById("status").textContent="Listening...";
+ recognition.onend=()=>document.getElementById("status").textContent="Systems Ready";
+ recognition.onresult=e=>{
+ document.getElementById("question").value=e.results[0][0].transcript;
+ sendMessage();
+ };
+ recognition.onerror=()=>document.getElementById("status").textContent="Microphone unavailable";
+ recognition.start();
+}
+
+document.getElementById("question").addEventListener("keydown",e=>{
+ if(e.key==="Enter")sendMessage();
+});
+</script>
+</body>
+</html>
