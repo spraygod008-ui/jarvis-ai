@@ -2,47 +2,31 @@
 async function sendMessage() {
   const input = document.getElementById("question");
   const text = input.value.trim();
-
   if (!text) return;
 
   addMessage("YOU", text);
   input.value = "";
 
-  document.getElementById("status").textContent =
-    "JARVIS is thinking...";
+  document.getElementById("status").textContent = "JARVIS is thinking...";
 
   try {
     const response = await fetch("/api/chat", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        message: text
-      })
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text })
     });
 
     const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || "AI request failed");
-    }
+    if (!response.ok) throw new Error(data.error);
 
     lastReply = data.reply;
     addMessage("JARVIS", lastReply);
     speakReply();
-
-    document.getElementById("status").textContent =
-      "Systems Ready";
-
+    document.getElementById("status").textContent = "Systems Ready";
   } catch (error) {
     console.error(error);
-
     lastReply = "Sorry, I could not connect to my AI brain.";
     addMessage("JARVIS", lastReply);
-
-    document.getElementById("status").textContent =
-      "Connection Error";
+    document.getElementById("status").textContent = "Connection Error";
   }
 }
-
