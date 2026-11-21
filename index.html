@@ -96,15 +96,46 @@ function replyTo(text){
  return "I received your message: "+text+". मेरा AI brain अभी connect नहीं हुआ है।";
 }
 
-function sendMessage(){
+async function sendMessage(){
  const input=document.getElementById("question");
+ const sendButton=document.querySelector('button[onclick="sendMessage()"]');
+ const status=document.getElementById("status");
  const text=input.value.trim();
- if(!text)return;
+ if(!text || sendButton.disabled)return;
+
  addMessage("YOU",text);
- lastReply=replyTo(text);
- addMessage("JARVIS",lastReply);
  input.value="";
- speakReply();
+ sendButton.disabled=true;
+ sendButton.textContent="Thinking...";
+ status.textContent="JARVIS is thinking...";
+
+ try{
+  const response=await fetch("/api/chat",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({message:text})
+  });
+  const data=await response.json();
+
+  if(!response.ok){
+   throw new Error(data.error || "Gemini request failed.");
+  }
+  if(typeof data.reply!=="string" || !data.reply.trim()){
+   throw new Error("JARVIS received an empty reply.");
+  }
+
+  lastReply=data.reply.trim();
+  addMessage("JARVIS",lastReply);
+  speakReply();
+  status.textContent="AI Brain Connected";
+ }catch(error){
+  lastReply="Sorry, I couldn't connect to my AI brain. "+error.message;
+  addMessage("JARVIS",lastReply);
+  status.textContent="Connection Error";
+ }finally{
+  sendButton.disabled=false;
+  sendButton.textContent="Send Message";
+ }
 }
 
 function speakReply(){
