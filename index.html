@@ -7,7 +7,7 @@
 <style>
 *{box-sizing:border-box}body{margin:0;background:#050b16;color:#d9f6ff;font-family:Arial,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center}.app{width:95%;max-width:850px;text-align:center;padding:25px}h1{font-size:42px;letter-spacing:8px;color:#51dfff}.status{color:#79b8cc}.core{width:150px;height:150px;border-radius:50%;margin:24px auto;border:3px solid #26cfff;box-shadow:0 0 25px #079bcf,inset 0 0 30px #079bcf;display:grid;place-items:center;animation:pulse 2s infinite}.core span{font-size:55px;color:#5ceaff}@keyframes pulse{50%{box-shadow:0 0 55px #00cfff,inset 0 0 45px #00cfff}}button{background:#087fa5;color:white;border:1px solid #39dfff;padding:13px 20px;border-radius:9px;cursor:pointer;margin:6px;font-size:15px}button:hover{background:#07546e}button:disabled{opacity:.5;cursor:wait}input{width:min(70%,520px);padding:14px;border-radius:8px;border:1px solid #39dfff;background:#101e30;color:white}.chat{text-align:left;background:#0c1929;border:1px solid #164a65;padding:18px;border-radius:12px;min-height:100px;margin:25px 0;line-height:1.6}#messages{max-height:240px;overflow:auto}.small{font-size:12px;color:#82a9ba}.hidden{display:none!important}.panel{background:#0c1929;border:1px solid #164a65;border-radius:14px;padding:28px;margin:20px auto;max-width:520px}.error{color:#ff9b9b}.success{color:#8de8b0}
 </style>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 </head>
 <body>
 <div class="app">
@@ -38,7 +38,23 @@
 const SUPABASE_URL = "https://brpszcevzqwuiuvqcfri.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_oj-G9SY6GeqioBpgRUryHw_YjktCaU9";
 const OWNER_EMAIL = "spraygod008@gmail.com";
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+let supabase = null;
+let supabaseReady = null;
+async function initializeSupabase(){
+ if(!supabaseReady){
+  supabaseReady = import("https://esm.sh/@supabase/supabase-js@2").then(({createClient})=>{
+   supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+   supabase.auth.onAuthStateChange((_event,session)=>{acceptSession(session)});
+   supabase.auth.getSession().then(({data})=>acceptSession(data.session)).catch(e=>showLogin("Session check failed: "+e.message,true));
+   return supabase;
+  }).catch(e=>{
+   supabaseReady = null;
+   showLogin("Login library could not load. Check your internet or try again. "+e.message,true);
+   throw e;
+  });
+ }
+ return supabaseReady;
+}
 let lastReply = "Hello! I am JARVIS. How can I help you?";
 let accessToken = null;
 
@@ -70,18 +86,18 @@ async function acceptSession(session){
  document.getElementById("welcome").textContent="Signed in as "+email;
 }
 async function signIn(){
- const b=document.getElementById("loginButton"); b.disabled=true;
+ const b=document.getElementById("loginButton"); b.disabled=true; b.textContent="Connecting...";
+ document.getElementById("loginStatus").textContent="Connecting securely to Google...";
  try{
-  const {error}=await supabase.auth.signInWithOAuth({
+  const client=await initializeSupabase();
+  const {error}=await client.auth.signInWithOAuth({
    provider:"google",
    options:{redirectTo:window.location.origin,queryParams:{prompt:"select_account"}}
   });
   if(error) throw error;
- }catch(e){showLogin("Sign-in failed: "+e.message,true);b.disabled=false}
+ }catch(e){showLogin("Sign-in failed: "+e.message,true);b.disabled=false;b.textContent="Continue with Google"}
 }
-async function signOut(){await supabase.auth.signOut();accessToken=null;showLogin("You have signed out.");}
-supabase.auth.onAuthStateChange((_event,session)=>{acceptSession(session)});
-supabase.auth.getSession().then(({data})=>acceptSession(data.session));
+async function signOut(){if(supabase)await supabase.auth.signOut();accessToken=null;showLogin("You have signed out.");}
 
 async function sendMessage(){
  const input=document.getElementById("question"), button=document.getElementById("sendButton");
@@ -105,6 +121,8 @@ function startVoice(){
  r.onerror=()=>setStatus("Microphone unavailable");r.start();
 }
 document.getElementById("question").addEventListener("keydown",e=>{if(e.key==="Enter")sendMessage()});
+document.getElementById("loginButton").addEventListener("click",signIn);
+initializeSupabase().catch(()=>{});
 </script>
 </body>
 </html>
