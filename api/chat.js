@@ -4,10 +4,10 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     return res.status(500).json({
-      error: "Gemini API key is not configured in Vercel."
+      error: "OpenRouter API key is not configured in Vercel."
     });
   }
 
@@ -29,15 +29,20 @@ module.exports = async function handler(req, res) {
       "Ask for confirmation before any consequential action."
     ].join(" ");
 
-    const response = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
+        "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
-        "x-goog-api-key": apiKey
+        "HTTP-Referer": "https://jarvis-g48utaffn-spraygod008-9340.vercel.app",
+        "X-Title": "JARVIS AI"
       },
       body: JSON.stringify({
-        model: "gemini-3.8-flash",
-        input: systemPrompt + "\n\nUser: " + message.trim()
+        model: "openrouter/free",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: message.trim() }
+        ]
       }),
       signal: AbortSignal.timeout(30000)
     });
@@ -45,42 +50,28 @@ module.exports = async function handler(req, res) {
     const data = await response.json();
 
     if (!response.ok) {
-      console.error("Gemini API error:", response.status, data);
+      console.error("OpenRouter API error:", response.status, data);
       return res.status(502).json({
-        error: data.error?.message || "Gemini could not process your request."
+        error: data.error?.message || "OpenRouter could not process your request."
       });
     }
 
-    // Interactions REST responses contain generated text in model_output steps.
-    const stepText = Array.isArray(data.steps)
-      ? data.steps
-          .filter(step => step.type === "model_output" && Array.isArray(step.content))
-          .flatMap(step => step.content)
-          .filter(part => part.type === "text" && typeof part.text === "string")
-          .map(part => part.text)
-          .join("\n")
-      : "";
+    const reply = data.choices?.[0]?.message?.content;
 
-    const reply = (
-      (typeof data.output_text === "string" && data.output_text) ||
-      stepText ||
-      ""
-    ).trim();
-
-    if (!reply) {
-      console.error("Gemini returned no text:", data);
+    if (typeof reply !== "string" || !reply.trim()) {
+      console.error("OpenRouter returned no text:", data);
       return res.status(502).json({
-        error: "Gemini returned an empty response. Please try again."
+        error: "OpenRouter returned an empty response. Please try again."
       });
     }
 
-    return res.status(200).json({ reply });
+    return res.status(200).json({ reply: reply.trim() });
   } catch (error) {
     console.error("JARVIS backend error:", error);
     const timedOut = error && error.name === "TimeoutError";
     return res.status(timedOut ? 504 : 500).json({
       error: timedOut
-        ? "Gemini took too long to respond. Please try again."
+        ? "OpenRouter took too long to respond. Please try again."
         : "Something went wrong while contacting JARVIS AI."
     });
   }
