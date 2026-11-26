@@ -30,8 +30,12 @@
 <button id="sendButton" onclick="sendMessage()">Send Message</button>
 <button onclick="startVoice()">🎤 Speak</button>
 <button onclick="speakReply()">🔊 Repeat Reply</button>
+<button id="connectGmailButton" onclick="connectGmail()">Connect Gmail (Read Only)</button>
+<button id="loadGmailButton" onclick="loadRecentEmails()">Load Recent Emails</button>
+<div id="gmailStatus" class="small">Gmail is not connected.</div>
+<div id="gmailMessages" class="chat hidden" style="max-height:260px;overflow:auto"></div>
 <button onclick="signOut()">Sign Out</button>
-<p class="small">Gmail and YouTube actions are not enabled yet. They will require separate permission.</p>
+<p class="small">Gmail permission is read-only. JARVIS cannot send, delete, or modify emails.</p>
 </section>
 </div>
 <script>
@@ -57,6 +61,7 @@ async function initializeSupabase(){
 }
 let lastReply = "Hello! I am JARVIS. How can I help you?";
 let accessToken = null;
+let gmailAccessToken = null;
 
 function addMessage(sender,message){
  const box=document.getElementById("messages");
@@ -81,6 +86,8 @@ async function acceptSession(session){
   accessToken=null;showLogin("Access denied. This JARVIS account is private.",true);return;
  }
  accessToken=session.access_token;
+ gmailAccessToken=session.provider_token || null;
+ if(gmailAccessToken){document.getElementById("gmailStatus").textContent="Gmail permission received. You can load recent emails."; }
  document.getElementById("loginPanel").classList.add("hidden");
  document.getElementById("assistantPanel").classList.remove("hidden");
  document.getElementById("welcome").textContent="Signed in as "+email;
@@ -97,7 +104,57 @@ async function signIn(){
   if(error) throw error;
  }catch(e){showLogin("Sign-in failed: "+e.message,true);b.disabled=false;b.textContent="Continue with Google"}
 }
-async function signOut(){if(supabase)await supabase.auth.signOut();accessToken=null;showLogin("You have signed out.");}
+async function connectGmail(){
+ const b=document.getElementById("connectGmailButton");
+ b.disabled=true;b.textContent="Opening Google permission...";
+ try{
+  const client=await initializeSupabase();
+  const {error}=await client.auth.signInWithOAuth({
+   provider:"google",
+   options:{
+    scopes:"https://www.googleapis.com/auth/gmail.readonly",
+    redirectTo:window.location.origin,
+    queryParams:{access_type:"offline",prompt:"consent select_account"}
+   }
+  });
+  if(error)throw error;
+ }catch(e){
+  document.getElementById("gmailStatus").textContent="Gmail connection failed: "+e.message;
+  b.disabled=false;b.textContent="Connect Gmail (Read Only)";
+ }
+}
+async function loadRecentEmails(){
+ const b=document.getElementById("loadGmailButton"),status=document.getElementById("gmailStatus"),box=document.getElementById("gmailMessages");
+ if(!gmailAccessToken){status.textContent="Gmail permission missing. Click Connect Gmail first.";return;}
+ b.disabled=true;b.textContent="Loading...";
+ status.textContent="Reading your 5 most recent emails...";
+ try{
+  const listResponse=await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=5",{
+   headers:{Authorization:"Bearer "+gmailAccessToken}
+  });
+  const list=await listResponse.json();
+  if(!listResponse.ok)throw new Error(list.error?.message||"Gmail API request failed");
+  box.innerHTML="";
+  if(!list.messages?.length){box.textContent="No recent emails found.";box.classList.remove("hidden");status.textContent="Gmail connected.";return;}
+  for(const item of list.messages){
+   const r=await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/"+encodeURIComponent(item.id)+"?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date",{
+    headers:{Authorization:"Bearer "+gmailAccessToken}
+   });
+   const m=await r.json();
+   if(!r.ok)continue;
+   const headers=m.payload?.headers||[];
+   const getHeader=n=>headers.find(h=>h.name?.toLowerCase()===n.toLowerCase())?.value||"";
+   const row=document.createElement("div");row.style.padding="10px 0";row.style.borderBottom="1px solid #164a65";
+   const subject=document.createElement("b");subject.textContent=getHeader("Subject")||"(No subject)";
+   const meta=document.createElement("div");meta.className="small";meta.textContent=(getHeader("From")+" • "+getHeader("Date"));
+   const snippet=document.createElement("div");snippet.textContent=m.snippet||"";
+   row.append(subject,meta,snippet);box.appendChild(row);
+  }
+  box.classList.remove("hidden");status.textContent="Gmail connected. Showing up to 5 recent emails (read-only).";
+ }catch(e){status.textContent="Gmail error: "+e.message;}
+ finally{b.disabled=false;b.textContent="Load Recent Emails";}
+}
+async function signOut(){if(supabase)await supabase.auth.signOut();accessToken=null;gmailAccessToken=null;showLogin("You have signed out.");}
 
 async function sendMessage(){
  const input=document.getElementById("question"), button=document.getElementById("sendButton");
@@ -121,7 +178,7 @@ function startVoice(){
  r.onerror=()=>setStatus("Microphone unavailable");r.start();
 }
 document.getElementById("question").addEventListener("keydown",e=>{if(e.key==="Enter")sendMessage()});
-document.getElementById("loginButton").addEventListener("click",signIn);
+// Login is wired through the button onclick handler.
 initializeSupabase().catch(()=>{});
 </script>
 </body>
