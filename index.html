@@ -31,6 +31,8 @@
 <button onclick="startVoice()">🎤 Speak</button>
 <button onclick="speakReply()">🔊 Repeat Reply</button>
 <button id="connectGmailButton" onclick="connectGmail()">Connect Gmail (Read Only)</button>
+<button id="connectYouTubeButton" onclick="connectYouTube()">Connect YouTube</button>
+<div id="youtubeStatus" class="small">YouTube is not connected.</div>
 <button id="loadGmailButton" onclick="loadRecentEmails()">Load Recent Emails</button>
 <div id="gmailStatus" class="small">Gmail is not connected.</div>
 <div id="gmailMessages" class="chat hidden" style="max-height:260px;overflow:auto"></div>
@@ -63,6 +65,7 @@ async function initializeSupabase(){
 let lastReply = "Hello! I am JARVIS. How can I help you?";
 let accessToken = null;
 let gmailAccessToken = null;
+let youtubeAccessToken = null;
 
 function addMessage(sender,message){
  const box=document.getElementById("messages");
@@ -88,6 +91,8 @@ async function acceptSession(session){
  }
  accessToken=session.access_token;
  gmailAccessToken=session.provider_token || null;
+ youtubeAccessToken=session.provider_token || null;
+ if(youtubeAccessToken) checkYouTubeConnection();
  if(gmailAccessToken){document.getElementById("gmailStatus").textContent="Gmail permission received. You can load recent emails."; }
  document.getElementById("loginPanel").classList.add("hidden");
  document.getElementById("assistantPanel").classList.remove("hidden");
@@ -124,6 +129,38 @@ async function connectGmail(){
   b.disabled=false;b.textContent="Connect Gmail (Read Only)";
  }
 }
+async function connectYouTube(){
+ const b=document.getElementById("connectYouTubeButton");
+ b.disabled=true;b.textContent="Opening YouTube permission...";
+ try{
+  const client=await initializeSupabase();
+  const {error}=await client.auth.signInWithOAuth({
+   provider:"google",
+   options:{
+    scopes:"openid email profile https://www.googleapis.com/auth/youtube.upload",
+    redirectTo:window.location.origin,
+    queryParams:{access_type:"offline",prompt:"consent select_account"}
+   }
+  });
+  if(error)throw error;
+ }catch(e){
+  document.getElementById("youtubeStatus").textContent="YouTube connection failed: "+e.message;
+  b.disabled=false;b.textContent="Connect YouTube";
+ }
+}
+async function checkYouTubeConnection(){
+ const status=document.getElementById("youtubeStatus");
+ if(!youtubeAccessToken){status.textContent="YouTube permission missing. Click Connect YouTube.";return;}
+ try{
+  const r=await fetch("https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true",{
+   headers:{Authorization:"Bearer "+youtubeAccessToken}
+  });
+  const data=await r.json();
+  if(!r.ok)throw new Error(data.error?.message||"YouTube API check failed");
+  const channel=data.items?.[0]?.snippet?.title;
+  status.textContent=channel?"YouTube connected: "+channel:"Permission received, but no YouTube channel was found.";
+ }catch(e){status.textContent="YouTube connection check failed: "+e.message+". Click Connect YouTube to grant permission.";}
+}
 async function loadRecentEmails(){
  const b=document.getElementById("loadGmailButton"),status=document.getElementById("gmailStatus"),box=document.getElementById("gmailMessages");
  if(!gmailAccessToken){status.textContent="Gmail permission missing. Click Connect Gmail first.";return;}
@@ -155,7 +192,7 @@ async function loadRecentEmails(){
  }catch(e){status.textContent="Gmail error: "+e.message;}
  finally{b.disabled=false;b.textContent="Load Recent Emails";}
 }
-async function signOut(){if(supabase)await supabase.auth.signOut();accessToken=null;gmailAccessToken=null;showLogin("You have signed out.");}
+async function signOut(){if(supabase)await supabase.auth.signOut();accessToken=null;gmailAccessToken=null;youtubeAccessToken=null;showLogin("You have signed out.");}
 
 async function sendMessage(){
  const input=document.getElementById("question"), button=document.getElementById("sendButton");
