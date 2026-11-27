@@ -1,28 +1,42 @@
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
-    return res.status(405).json({ error: "Method not allowed" });
+    return res.status(405).json({ error: "Method not allowed." });
   }
 
-  const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
-  if (!token) return res.status(401).json({ error: "Sign in required." });
+  // Telegram webhook may call this endpoint server-to-server after its own
+  // Telegram signature and owner-ID checks. The shared secret never leaves Vercel.
+  const internalSecret = process.env.TELEGRAM_WEBHOOK_SECRET || "";
+  const suppliedInternalSecret = req.headers["x-jarvis-internal-secret"] || "";
+  const trustedInternalCall = Boolean(internalSecret && suppliedInternalSecret === internalSecret);
+
+  if (!trustedInternalCall) {
+    const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+    if (!token) return res.status(401).json({ error: "Sign in required." });
+
+    try {
+      const auth = await fetch("https://brpszcevzqwuiuvqcfri.supabase.co/auth/v1/user", {
+        headers: {
+          apikey: "sb_publishable_oj-G9SY6GeqioBpgRUryHw_YjktCaU9",
+          Authorization: "Bearer " + token
+        }
+      });
+      if (!auth.ok) return res.status(401).json({ error: "Session invalid. Please sign in again." });
+      const user = await auth.json();
+      if ((user.email || "").toLowerCase() !== "spraygod008@gmail.com") {
+        return res.status(403).json({ error: "This JARVIS instance is private." });
+      }
+    } catch (error) {
+      console.error("YouTube Agent authentication error:", error);
+      return res.status(500).json({ error: "Could not verify the JARVIS session." });
+    }
+  }
 
   try {
-    const auth = await fetch("https://brpszcevzqwuiuvqcfri.supabase.co/auth/v1/user", {
-      headers: {
-        apikey: "sb_publishable_oj-G9SY6GeqioBpgRUryHw_YjktCaU9",
-        Authorization: "Bearer " + token
-      }
-    });
-    if (!auth.ok) return res.status(401).json({ error: "Session invalid. Please sign in again." });
-    const user = await auth.json();
-    if ((user.email || "").toLowerCase() !== "spraygod008@gmail.com") {
-      return res.status(403).json({ error: "This JARVIS instance is private." });
-    }
-
     const { task, input, channel } = req.body || {};
 
     if (task === "analytics") {
+      if (trustedInternalCall) return res.status(403).json({ error: "Telegram analytics is not enabled yet." });
       const youtubeToken = req.headers["x-youtube-access-token"];
       if (!youtubeToken) return res.status(401).json({ error: "YouTube permission missing. Go back to JARVIS and click Connect YouTube again." });
 
@@ -78,7 +92,7 @@ module.exports = async function handler(req, res) {
     if (!apiKey) return res.status(500).json({ error: "OPENROUTER_API_KEY is not configured in Vercel." });
 
     const taskGuides = {
-      script: "Write a compelling YouTube video script. Start with 3 hook options, then a strong opening, structured scenes/sections, narration, visual suggestions, and a satisfying ending. Score the hooks and explain the best one.",
+      script: "Write a compelling YouTube video script. Start with 3 hook options, then a strong opening, structured scenes/sections, narration, visual suggestions, and a satisfying ending. For Shorts, include a timestamped vertical scene plan, title, description, and relevant hashtags when requested.",
       package: "Create 5 title and thumbnail-concept pairs. Each pair must work together, avoid misleading clickbait, and include a concise thumbnail text suggestion. Rank the pairs and explain why the top pair is strongest.",
       edit: "Turn the supplied transcript into an editor-friendly edit decision list with timestamps when available, cuts, b-roll, captions, pacing notes, and sections to remove. Never invent timestamps.",
       comment: "Classify supplied comments by sentiment and intent. Draft short, respectful creator replies. Flag spam, harassment, and questions needing a human decision; do not post replies.",
