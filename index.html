@@ -137,7 +137,7 @@ async function connectYouTube(){
   const {error}=await client.auth.signInWithOAuth({
    provider:"google",
    options:{
-    scopes:"openid email profile https://www.googleapis.com/auth/youtube.upload",
+    scopes:"openid email profile https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.upload",
     redirectTo:window.location.origin,
     queryParams:{access_type:"offline",prompt:"consent select_account"}
    }
