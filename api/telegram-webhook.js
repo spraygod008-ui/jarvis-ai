@@ -33,7 +33,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (text === "/start" || text === "/help") {
-    await sendTelegram(botToken, message.chat.id, "नमस्ते! मैं JARVIS हूँ। अब आप मुझसे यहीं Hindi, Hinglish या English में बात कर सकते हैं।\n\nCommands:\n/start — शुरू करें\n/help — मदद\n\nYouTube पर कोई भी upload अभी Private रहेगा; Public करने से पहले आपकी approval ज़रूरी होगी।");
+    await sendTelegram(botToken, message.chat.id, "नमस्ते! मैं JARVIS हूँ। अब आप मुझसे यहीं Hindi, Hinglish या English में बात कर सकते हैं।\n\nCommands:\n/start — शुरू करें\n/help — मदद\n/yt — YouTube Agent mode\n\nYouTube पर कोई भी upload अभी Private रहेगा; Public करने से पहले आपकी approval ज़रूरी होगी।");
     return res.status(200).json({ ok: true });
   }
 
@@ -42,13 +42,44 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({ ok: true });
   }
 
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    await sendTelegram(botToken, message.chat.id, "JARVIS AI key Vercel mein configured nahi hai.");
-    return res.status(200).json({ ok: true });
-  }
-
   try {
+    const youtubeRequest = text === "/yt" || text.startsWith("/yt ") ||
+      /raahi\s*motion|youtube|\bshorts?\b|\bvideo\b|\bscript\b|thumbnail|upload/i.test(text);
+
+    if (youtubeRequest) {
+      const task = /thumbnail|title|seo|description|tags/i.test(text) && !/script|scene|story|narration/i.test(text)
+        ? "package"
+        : "script";
+      const agentResponse = await fetch("https://jarvis-ai-nu-seven.vercel.app/api/youtube-agent", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-jarvis-internal-secret": expectedSecret
+        },
+        body: JSON.stringify({
+          task,
+          input: text.replace(/^\/yt\s*/i, "").trim() || "Create a Hindi YouTube Short plan with script, scenes, title and description.",
+          channel: "RAAHI MOTION — Hindi faceless travel and cinematic YouTube channel"
+        }),
+        signal: AbortSignal.timeout(50000)
+      });
+      const agentData = await agentResponse.json();
+      if (!agentResponse.ok) {
+        console.error("Telegram YouTube Agent error:", agentResponse.status, agentData);
+        await sendTelegram(botToken, message.chat.id, "YouTube Agent abhi response nahi de paaya. Thodi der baad dobara try karo.");
+        return res.status(200).json({ ok: true });
+      }
+      const result = typeof agentData.result === "string" ? agentData.result.trim() : "";
+      await sendTelegram(botToken, message.chat.id, result.slice(0, 3900) || "YouTube Agent se khaali response mila.");
+      return res.status(200).json({ ok: true, agent: "youtube-agent", task });
+    }
+
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) {
+      await sendTelegram(botToken, message.chat.id, "JARVIS AI key Vercel mein configured nahi hai.");
+      return res.status(200).json({ ok: true });
+    }
+
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
