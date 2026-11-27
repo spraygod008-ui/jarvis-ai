@@ -4,7 +4,7 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const sessionToken = (req.headers.authorization || "").replace(/^Bearer\\s+/i, "");
+  const authHeader = req.headers.authorization || "";\n  const sessionToken = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : authHeader.trim();
   if (!sessionToken) return res.status(401).json({ error: "Sign in required." });
 
   try {
