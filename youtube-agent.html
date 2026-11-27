@@ -35,6 +35,21 @@
 <div id="analyticsResult" class="result">Connect YouTube, then load your channel analytics.</div>
 </div>
 <div class="panel">
+<h2>Upload Video to YouTube</h2>
+<p class="muted">Upload directly to your connected YouTube channel. Every upload is set to PRIVATE. JARVIS will not make it public automatically.</p>
+<label for="uploadFile">Select video file</label>
+<input id="uploadFile" type="file" accept="video/*">
+<label for="uploadTitle">Video title</label>
+<input id="uploadTitle" maxlength="100" placeholder="Enter video title">
+<label for="uploadDescription">Description</label>
+<textarea id="uploadDescription" maxlength="5000" placeholder="Write your video description..."></textarea>
+<label for="uploadTags">Tags (comma separated)</label>
+<input id="uploadTags" placeholder="Hindi, travel, cinematic">
+<button id="uploadButton" type="button" onclick="uploadVideoPrivate()">Upload as Private</button>
+<span id="uploadStatus" class="muted" role="status"></span>
+<div id="uploadResult" class="result">Your uploaded video details will appear here.</div>
+</div>
+<div class="panel">
 <h2>Result</h2><div id="result" class="result">Your result will appear here.</div>
 <button onclick="copyResult()">Copy result</button>
 </div>
@@ -112,6 +127,36 @@ window.loadYouTubeAnalytics=async()=>{
  finally{b.disabled=false;b.textContent="Load Live Analytics";}
 };
 
+window.uploadVideoPrivate=async()=>{
+ const status=$("uploadStatus"),button=$("uploadButton"),file=$("uploadFile").files?.[0];
+ const title=$("uploadTitle").value.trim(),description=$("uploadDescription").value.trim();
+ const tags=$("uploadTags").value.split(",").map(x=>x.trim()).filter(Boolean).slice(0,500);
+ if(!youtubeAccessToken){status.textContent="YouTube permission missing. Return to JARVIS and reconnect YouTube.";return;}
+ if(!file){status.textContent="Please select a video file.";return;}
+ if(!title){status.textContent="Please enter a video title.";return;}
+ if(!file.type.startsWith("video/")){status.textContent="Please select a valid video file.";return;}
+ button.disabled=true;button.textContent="Uploading...";status.textContent="Preparing secure private upload...";
+ try{
+  const metadata={snippet:{title,description,tags,categoryId:"22"},status:{privacyStatus:"private",selfDeclaredMadeForKids:false}};
+  const start=await fetch("https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",{
+   method:"POST",
+   headers:{"Authorization":"Bearer "+youtubeAccessToken,"Content-Type":"application/json; charset=UTF-8","X-Upload-Content-Length":String(file.size),"X-Upload-Content-Type":file.type},
+   body:JSON.stringify(metadata)
+  });
+  if(!start.ok){let err={};try{err=await start.json()}catch(_){};throw new Error(err.error?.message||"YouTube could not start the upload. Reconnect YouTube and try again.");}
+  const uploadUrl=start.headers.get("Location");
+  if(!uploadUrl)throw new Error("YouTube did not return an upload URL. Please try again.");
+  status.textContent="Uploading "+file.name+" ("+(file.size/1024/1024).toFixed(1)+" MB). Keep this page open...";
+  const uploaded=await fetch(uploadUrl,{method:"PUT",headers:{"Content-Type":file.type},body:file});
+  const data=await uploaded.json().catch(()=>({}));
+  if(!uploaded.ok)throw new Error(data.error?.message||"Video upload failed. Please retry.");
+  const videoId=data.id;
+  if(!videoId)throw new Error("Upload response did not include a video ID.");
+  $("uploadResult").textContent="Upload complete.\nTitle: "+(data.snippet?.title||title)+"\nPrivacy: PRIVATE\nVideo ID: "+videoId+"\nYouTube Studio: https://studio.youtube.com/video/"+videoId+"/edit";
+  status.textContent="Success! Your video is uploaded as PRIVATE. It has not been published.";
+ }catch(e){status.textContent="Upload error: "+e.message;}
+ finally{button.disabled=false;button.textContent="Upload as Private";}
+};
 window.copyResult=async()=>{if(!lastResult)return;try{await navigator.clipboard.writeText(lastResult);$("status").textContent="Result copied.";}catch(e){$("status").textContent="Copy failed; select the result text manually.";}}
 init().catch(e=>{$("login").classList.remove("hidden");});
 </script>
