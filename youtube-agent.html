@@ -46,7 +46,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const supabase=createClient("https://brpszcevzqwuiuvqcfri.supabase.co","sb_publishable_oj-G9SY6GeqioBpgRUryHw_YjktCaU9");
 const owner="spraygod008@gmail.com";
 const tasks=[
-["script","/yt-script","Script + hooks"],["package","/yt-package","Titles + thumbnails"],
+["analytics","/yt-analytics","Live channel analytics"],["script","/yt-script","Script + hooks"],["package","/yt-package","Titles + thumbnails"],
 ["edit","/yt-edit","Edit decision list"],["comment","/yt-comment","Comment triage"],
 ["plan","/yt-plan","Weekly content plan"],["viral","/yt-viral","Niche + video ideas"],
 ["retention","/yt-retention","Retention analysis"],["shorts","/yt-shorts","Shorts ideas"],
@@ -67,15 +67,18 @@ function drawTasks(){
 }
 async function init(){
  const {data:{session}}=await supabase.auth.getSession();
+ const savedYoutubeToken=sessionStorage.getItem("jarvis_youtube_access_token");
  if(!session||session.user?.email?.toLowerCase()!==owner){$("login").classList.remove("hidden");return;}
  accessToken=session.access_token;youtubeAccessToken=sessionStorage.getItem("jarvis_youtube_access_token")||session.provider_token||null;$("agent").classList.remove("hidden");drawTasks();
 }
 window.runTask=async()=>{
  const input=$("details").value.trim();
- if(!input){$("status").textContent="Please enter your topic or source material.";return;}
+ if(selected!=="analytics"&&!input){$("status").textContent="Please enter your topic or source material.";return;}
+ if(selected==="analytics"&&!window.youtubeAccessToken){$("status").textContent="YouTube permission not found. Return to JARVIS, reconnect YouTube, then reopen this page.";return;}
  const b=$("run");b.disabled=true;b.textContent="Working...";$("status").textContent="JARVIS is preparing your result...";
  try{
-  const r=await fetch("/api/youtube-agent",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+accessToken},body:JSON.stringify({task:selected,input,channel:$("channel").value})});
+  const headers={"Content-Type":"application/json","Authorization":"Bearer "+accessToken};if(selected==="analytics")headers["x-youtube-access-token"]=window.youtubeAccessToken;
+  const r=await fetch("/api/youtube-agent",{method:"POST",headers,body:JSON.stringify({task:selected,input,channel:$("channel").value})});
   const data=await r.json();if(!r.ok)throw new Error(data.error||"Request failed");
   lastResult=data.result;$("result").textContent=lastResult;$("status").textContent="Completed: "+selected;
  }catch(e){$("status").textContent="Error: "+e.message;}
