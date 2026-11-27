@@ -68,7 +68,7 @@ function drawTasks(){
 async function init(){
  const {data:{session}}=await supabase.auth.getSession();
  if(!session||session.user?.email?.toLowerCase()!==owner){$("login").classList.remove("hidden");return;}
- accessToken=session.access_token;youtubeAccessToken=session.provider_token||null;$("agent").classList.remove("hidden");drawTasks();
+ accessToken=session.access_token;youtubeAccessToken=sessionStorage.getItem("jarvis_youtube_access_token")||session.provider_token||null;$("agent").classList.remove("hidden");drawTasks();
 }
 window.runTask=async()=>{
  const input=$("details").value.trim();
