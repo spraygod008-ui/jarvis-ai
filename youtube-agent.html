@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JARVIS | YouTube Agent</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#050b16;color:#d9f6ff;font-family:Arial,sans-serif}.wrap{max-width:1000px;margin:auto;padding:24px}h1{color:#51dfff;letter-spacing:4px}.muted{color:#82a9ba;font-size:13px}.panel,.tool{background:#0c1929;border:1px solid #164a65;border-radius:12px;padding:18px;margin:14px 0}button{background:#087fa5;color:white;border:1px solid #39dfff;padding:11px 16px;border-radius:8px;cursor:pointer;margin:5px}button:disabled{opacity:.5}input,textarea,select{width:100%;padding:12px;margin:7px 0 14px;border-radius:8px;border:1px solid #39dfff;background:#101e30;color:white}textarea{min-height:160px;resize:vertical}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}.task{background:#10243a;text-align:left;width:100%;min-height:64px}.task strong{display:block}.result{white-space:pre-wrap;line-height:1.55;background:#071321;border:1px solid #164a65;padding:16px;border-radius:9px;min-height:80px;overflow-wrap:anywhere}.hidden{display:none!important}.danger{color:#ffb1b1}
+</style>
+</head>
+<body>
+<div class="wrap">
+<a href="/" style="color:#51dfff">← Back to JARVIS</a>
+<h1>JARVIS YOUTUBE AGENT</h1>
+<p class="muted">11 creator workflows inspired by the open-source YouTube Agent Skill. Creates drafts and analysis only; it does not publish to YouTube.</p>
+<section id="login" class="panel hidden">
+<h2>Sign in required</h2><p>Sign in to JARVIS first, then open this page again.</p><a href="/" style="color:#51dfff">Go to JARVIS sign in</a>
+</section>
+<section id="agent" class="hidden">
+<div class="panel">
+<label for="channel">Channel / niche context</label>
+<input id="channel" value="RAAHI MOTION — Hindi YouTube channel" maxlength="300">
+<p class="muted">Choose a workflow below, add your topic or source material, then ask JARVIS to prepare it.</p>
+<div class="grid" id="tasks"></div>
+<label for="details">Topic, transcript, comments, analytics, or instructions</label>
+<textarea id="details" placeholder="Example: Create a 60-second Hindi travel Short about Jaipur's hidden places..."></textarea>
+<button id="run" onclick="runTask()">Run YouTube Agent</button>
+<span id="status" class="muted" role="status"></span>
+</div>
+<div class="panel">
+<h2>Result</h2><div id="result" class="result">Your result will appear here.</div>
+<button onclick="copyResult()">Copy result</button>
+</div>
+</section>
+<p class="muted">Private JARVIS access. No YouTube upload or public comment action is performed.</p>
+</div>
+<script type="module">
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+const supabase=createClient("https://brpszcevzqwuiuvqcfri.supabase.co","sb_publishable_oj-G9SY6GeqioBpgRUryHw_YjktCaU9");
+const owner="spraygod008@gmail.com";
+const tasks=[
+["script","/yt-script","Script + hooks"],["package","/yt-package","Titles + thumbnails"],
+["edit","/yt-edit","Edit decision list"],["comment","/yt-comment","Comment triage"],
+["plan","/yt-plan","Weekly content plan"],["viral","/yt-viral","Niche + video ideas"],
+["retention","/yt-retention","Retention analysis"],["shorts","/yt-shorts","Shorts ideas"],
+["seo","/yt-seo","YouTube SEO package"],["chapters","/yt-chapters","Video chapters"],
+["audit","/yt-audit","Channel audit"]
+];
+let selected="script", accessToken=null, lastResult="";
+const $=id=>document.getElementById(id);
+function drawTasks(){
+ $("tasks").innerHTML="";
+ for(const [key,cmd,label] of tasks){
+  const b=document.createElement("button");b.className="task";b.type="button";
+  const strong=document.createElement("strong");strong.textContent=cmd;
+  const span=document.createElement("span");span.textContent=label;
+  b.append(strong,span);b.onclick=()=>{selected=key;document.querySelectorAll(".task").forEach(x=>x.style.borderColor="#164a65");b.style.borderColor="#51dfff";$("status").textContent="Selected: "+label;};$("tasks").append(b);
+ }
+ document.querySelector(".task").style.borderColor="#51dfff";
+}
+async function init(){
+ const {data:{session}}=await supabase.auth.getSession();
+ if(!session||session.user?.email?.toLowerCase()!==owner){$("login").classList.remove("hidden");return;}
+ accessToken=session.access_token;$("agent").classList.remove("hidden");drawTasks();
+}
+window.runTask=async()=>{
+ const input=$("details").value.trim();
+ if(!input){$("status").textContent="Please enter your topic or source material.";return;}
+ const b=$("run");b.disabled=true;b.textContent="Working...";$("status").textContent="JARVIS is preparing your result...";
+ try{
+  const r=await fetch("/api/youtube-agent",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+accessToken},body:JSON.stringify({task:selected,input,channel:$("channel").value})});
+  const data=await r.json();if(!r.ok)throw new Error(data.error||"Request failed");
+  lastResult=data.result;$("result").textContent=lastResult;$("status").textContent="Completed: "+selected;
+ }catch(e){$("status").textContent="Error: "+e.message;}
+ finally{b.disabled=false;b.textContent="Run YouTube Agent";}
+};
+window.copyResult=async()=>{if(!lastResult)return;try{await navigator.clipboard.writeText(lastResult);$("status").textContent="Result copied.";}catch(e){$("status").textContent="Copy failed; select the result text manually.";}}
+init().catch(e=>{$("login").classList.remove("hidden");});
+</script>
+</body>
+</html>
