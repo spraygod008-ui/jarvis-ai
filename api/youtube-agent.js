@@ -21,6 +21,48 @@ module.exports = async function handler(req, res) {
     }
 
     const { task, input, channel } = req.body || {};
+
+    if (task === "analytics") {
+      const youtubeToken = req.headers["x-youtube-access-token"];
+      if (!youtubeToken) return res.status(401).json({ error: "YouTube permission missing. Go back to JARVIS and click Connect YouTube again." });
+
+      const ytHeaders = { Authorization: "Bearer " + youtubeToken };
+      const channelResponse = await fetch("https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,contentDetails&mine=true", { headers: ytHeaders });
+      const channelData = await channelResponse.json();
+      if (!channelResponse.ok) return res.status(403).json({ error: channelData.error?.message || "YouTube API permission failed. Reconnect YouTube." });
+      const ch = channelData.items?.[0];
+      if (!ch) return res.status(404).json({ error: "No YouTube channel found for this Google account." });
+
+      let recentVideos = [];
+      const playlistId = ch.contentDetails?.relatedPlaylists?.uploads;
+      if (playlistId) {
+        const playlistResponse = await fetch("https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&maxResults=5&playlistId=" + encodeURIComponent(playlistId), { headers: ytHeaders });
+        const playlistData = await playlistResponse.json();
+        const ids = (playlistData.items || []).map(x => x.contentDetails?.videoId).filter(Boolean);
+        if (ids.length) {
+          const videosResponse = await fetch("https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=" + ids.map(encodeURIComponent).join(","), { headers: ytHeaders });
+          const videosData = await videosResponse.json();
+          if (videosResponse.ok) recentVideos = (videosData.items || []).map(v => ({
+            title: v.snippet?.title || "Untitled",
+            publishedAt: v.snippet?.publishedAt || null,
+            views: Number(v.statistics?.viewCount || 0),
+            likes: Number(v.statistics?.likeCount || 0),
+            comments: Number(v.statistics?.commentCount || 0)
+          }));
+        }
+      }
+
+      const analytics = {
+        channel: ch.snippet?.title || "YouTube channel",
+        subscribers: ch.statistics?.hiddenSubscriberCount ? "Hidden" : Number(ch.statistics?.subscriberCount || 0),
+        totalViews: Number(ch.statistics?.viewCount || 0),
+        videoCount: Number(ch.statistics?.videoCount || 0),
+        recentVideos,
+        source: "YouTube Data API v3",
+        limitation: "This overview does not include YouTube Studio revenue, watch time, impressions, or audience-retention reports."
+      };
+      return res.status(200).json({ task, result: JSON.stringify(analytics, null, 2), analytics });
+    }
     const allowedTasks = [
       "script", "package", "edit", "comment", "plan", "viral",
       "retention", "shorts", "seo", "chapters", "audit"
