@@ -28,6 +28,13 @@
 <span id="status" class="muted" role="status"></span>
 </div>
 <div class="panel">
+<h2>Live YouTube Channel Analytics</h2>
+<p class="muted">Read-only channel overview and five latest uploads, fetched directly from the YouTube Data API.</p>
+<button id="analyticsButton" type="button" onclick="loadYouTubeAnalytics()">Load Live Analytics</button>
+<span id="analyticsStatus" class="muted" role="status">Not loaded yet.</span>
+<div id="analyticsResult" class="result">Connect YouTube, then load your channel analytics.</div>
+</div>
+<div class="panel">
 <h2>Result</h2><div id="result" class="result">Your result will appear here.</div>
 <button onclick="copyResult()">Copy result</button>
 </div>
@@ -46,7 +53,7 @@ const tasks=[
 ["seo","/yt-seo","YouTube SEO package"],["chapters","/yt-chapters","Video chapters"],
 ["audit","/yt-audit","Channel audit"]
 ];
-let selected="script", accessToken=null, lastResult="";
+let selected="script", accessToken=null, youtubeAccessToken=null, lastResult="";
 const $=id=>document.getElementById(id);
 function drawTasks(){
  $("tasks").innerHTML="";
@@ -61,7 +68,7 @@ function drawTasks(){
 async function init(){
  const {data:{session}}=await supabase.auth.getSession();
  if(!session||session.user?.email?.toLowerCase()!==owner){$("login").classList.remove("hidden");return;}
- accessToken=session.access_token;$("agent").classList.remove("hidden");drawTasks();
+ accessToken=session.access_token;youtubeAccessToken=session.provider_token||null;$("agent").classList.remove("hidden");drawTasks();
 }
 window.runTask=async()=>{
  const input=$("details").value.trim();
@@ -74,6 +81,34 @@ window.runTask=async()=>{
  }catch(e){$("status").textContent="Error: "+e.message;}
  finally{b.disabled=false;b.textContent="Run YouTube Agent";}
 };
+
+window.loadYouTubeAnalytics=async()=>{
+ const b=$("analyticsButton"),status=$("analyticsStatus"),box=$("analyticsResult");
+ if(!youtubeAccessToken){status.textContent="YouTube token missing. Go back to JARVIS, click Connect YouTube again, then reopen this page.";return;}
+ b.disabled=true;b.textContent="Loading...";
+ status.textContent="Fetching channel and recent video statistics...";
+ try{
+  const r=await fetch("/api/youtube-analytics",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+accessToken},body:JSON.stringify({youtubeAccessToken})});
+  const data=await r.json();if(!r.ok)throw new Error(data.error||"Analytics request failed");
+  const ch=data.channel||{},stats=ch.statistics||{};
+  const fmt=n=>Number(n||0).toLocaleString();
+  const lines=[
+   "CHANNEL: "+(ch.title||"YouTube channel"),
+   "Subscribers: "+(stats.hiddenSubscriberCount?"Hidden":fmt(stats.subscriberCount)),
+   "Total views: "+fmt(stats.viewCount),
+   "Total videos: "+fmt(stats.videoCount),
+   "",
+   "LATEST UPLOADS"
+  ];
+  for(const v of (data.latestVideos||[])){
+   lines.push("• "+v.title+" | Views: "+fmt(v.viewCount)+" | Likes: "+fmt(v.likeCount)+" | Comments: "+fmt(v.commentCount));
+  }
+  if(!(data.latestVideos||[]).length)lines.push("No recent public uploads found.");
+  box.textContent=lines.join("\n");status.textContent="Live analytics loaded.";
+ }catch(e){status.textContent="Analytics error: "+e.message;}
+ finally{b.disabled=false;b.textContent="Load Live Analytics";}
+};
+
 window.copyResult=async()=>{if(!lastResult)return;try{await navigator.clipboard.writeText(lastResult);$("status").textContent="Result copied.";}catch(e){$("status").textContent="Copy failed; select the result text manually.";}}
 init().catch(e=>{$("login").classList.remove("hidden");});
 </script>
