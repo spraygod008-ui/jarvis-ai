@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JARVIS | Free Video Studio</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#050b16;color:#d9f6ff;font-family:Arial,sans-serif}.wrap{max-width:1100px;margin:auto;padding:22px}h1{color:#51dfff;letter-spacing:3px}.muted{color:#82a9ba;font-size:13px}.panel{background:#0c1929;border:1px solid #164a65;border-radius:12px;padding:18px;margin:14px 0}input,textarea,select{width:100%;padding:12px;margin:7px 0 14px;border-radius:8px;border:1px solid #39dfff;background:#101e30;color:white}textarea{min-height:220px}button{background:#087fa5;color:white;border:1px solid #39dfff;padding:11px 16px;border-radius:8px;cursor:pointer;margin:5px}button:disabled{opacity:.5;cursor:wait}.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.asset{background:#071321;border:1px solid #164a65;border-radius:10px;padding:10px}.asset video{width:100%;max-height:190px;object-fit:cover;background:#000}.asset a{color:#51dfff}.result{white-space:pre-wrap;line-height:1.6;background:#071321;border:1px solid #164a65;padding:14px;border-radius:9px;overflow-wrap:anywhere}.status{color:#8de8b0}.hidden{display:none!important}canvas{max-width:100%;height:auto;border-radius:8px;background:#111}.warning{color:#ffd28b}
+</style></head>
+<body><main class="wrap">
+<a href="/youtube-agent.html" style="color:#51dfff">← YouTube Agent</a>
+<h1>JARVIS FREE VIDEO STUDIO</h1>
+<p class="muted">Free-first creator workflow • Hindi • Shorts + Long videos • Nothing is published automatically</p>
+<section id="login" class="panel hidden"><h2>Sign in required</h2><a href="/" style="color:#51dfff">Sign in to JARVIS</a></section>
+<section id="studio" class="hidden">
+<div class="panel">
+<h2>1. Video brief</h2>
+<label>Video topic</label><input id="topic" value="5 top places in Ajmer to visit">
+<div class="row"><div><label>Format</label><select id="format"><option value="shorts">YouTube Shorts (9:16, up to 60 sec)</option><option value="long" selected>Long video (16:9, 5–8 min)</option></select></div><div><label>Language</label><select id="language"><option>Hindi</option><option>Hinglish</option><option>English</option></select></div></div>
+<button id="planBtn" onclick="makePlan()">Generate script + scene plan</button><span id="planStatus" class="muted"></span>
+</div>
+<div class="panel"><h2>2. Script and scene plan</h2><div id="script" class="result">Your generated script and scene plan will appear here.</div></div>
+<div class="panel">
+<h2>3. Find free stock footage</h2>
+<p class="muted">Search one scene at a time. Select clips that match the narration. Pixabay source and contributor credits are shown with results.</p>
+<label>Scene keyword</label><input id="sceneQuery" placeholder="Example: Ajmer city India lake aerial">
+<div class="row"><div><label>Clip orientation</label><select id="orientation"><option value="horizontal">Horizontal</option><option value="vertical">Vertical</option></select></div><div style="display:flex;align-items:end"><button id="searchBtn" onclick="searchFootage()">Search Pixabay footage</button></div></div>
+<span id="assetStatus" class="muted"></span><div id="assets" class="cards"></div>
+</div>
+<div class="panel">
+<h2>4. Create thumbnail</h2>
+<p class="muted">Choose a background image from a selected clip preview (or upload your own image), then generate a thumbnail graphic in your browser.</p>
+<input id="thumbImage" type="file" accept="image/*">
+<label>Thumbnail headline</label><input id="thumbText" maxlength="48" value="AJMER KE 5 BEST PLACES">
+<button onclick="makeThumbnail()">Generate thumbnail</button>
+<div><canvas id="thumbCanvas" width="1280" height="720"></canvas></div>
+<button onclick="downloadThumbnail()">Download thumbnail PNG</button>
+</div>
+<div class="panel">
+<h2>5. Video assembly</h2>
+<p class="warning">This first free-first build prepares the script, finds footage and creates the thumbnail. It does not yet render a finished MP4 or create an exportable Hindi voice-over. Next we will add the browser-based editor/rendering stage; long videos need substantial browser memory and processing time.</p>
+<p class="muted">Your YouTube upload remains a separate manual step and always defaults to PRIVATE.</p>
+</div>
+</section></main>
+<script type="module">
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+const supabase=createClient("https://brpszcevzqwuiuvqcfri.supabase.co","sb_publishable_oj-G9SY6GeqioBpgRUryHw_YjktCaU9");
+let sessionToken="", scriptText="", chosenImage="";
+const $=id=>document.getElementById(id);
+async function init(){const {data:{session}}=await supabase.auth.getSession();if(!session||session.user?.email?.toLowerCase()!=="spraygod008@gmail.com"){$("login").classList.remove("hidden");return;}sessionToken=session.access_token;$("studio").classList.remove("hidden");}
+window.makePlan=async()=>{
+ const topic=$("topic").value.trim();if(!topic)return;
+ const b=$("planBtn");b.disabled=true;b.textContent="JARVIS is writing...";
+ $("planStatus").textContent=" Creating Hindi script and visual scene plan...";
+ const format=$("format").value,language=$("language").value;
+ const prompt="Create a production-ready YouTube video package for topic: "+topic+". Format: "+(format==="shorts"?"vertical 9:16 Short, maximum 60 seconds":"horizontal 16:9 long video, target 5–8 minutes")+". Language: "+language+". Return: 1) 5 title options 2) 3 hooks 3) complete narration script 4) numbered scene-by-scene storyboard with duration, narration, and English stock-footage search keywords for each scene 5) ending CTA 6) description, tags and hashtags. Be fact-conscious; label uncertain facts and do not invent opening hours/prices.";
+ try{const r=await fetch("/api/youtube-agent",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+sessionToken},body:JSON.stringify({task:"script",input:prompt,channel:"RAAHI MOTION — Hindi travel and cinematic YouTube channel"})});const d=await r.json();if(!r.ok)throw new Error(d.error||"Could not generate plan");scriptText=d.result;$("script").textContent=scriptText;$("planStatus").textContent=" Script and storyboard ready. Copy scene keywords into footage search.";const first=topic.replace(/[^a-zA-Z0-9 ]/g," ").trim();$("sceneQuery").value=first+" India travel";$("thumbText").value=topic.toUpperCase().slice(0,40);}catch(e){$("planStatus").textContent=" Error: "+e.message;}finally{b.disabled=false;b.textContent="Generate script + scene plan";}
+};
+window.searchFootage=async()=>{
+ const q=$("sceneQuery").value.trim();if(!q)return;
+ const b=$("searchBtn");b.disabled=true;b.textContent="Searching...";
+ $("assetStatus").textContent=" Searching free stock clips...";
+ $("assets").innerHTML="";
+ try{const url="/api/video-assets?q="+encodeURIComponent(q)+"&orientation="+encodeURIComponent($("orientation").value);const r=await fetch(url,{headers:{Authorization:"Bearer "+sessionToken}});const d=await r.json();if(!r.ok)throw new Error(d.error||"Search failed");if(!d.videos.length){$("assetStatus").textContent="No matching clips. Try shorter English keywords.";return;}
+ $("assetStatus").textContent=d.total+" results found. Preview and choose suitable clips.";
+ for(const v of d.videos){const card=document.createElement("div");card.className="asset";const video=document.createElement("video");video.src=v.videoURL;video.controls=true;video.muted=true;video.preload="metadata";video.playsInline=true;const meta=document.createElement("p");meta.className="muted";meta.textContent=v.tags+" • "+v.duration+" sec • by "+v.user;const link=document.createElement("a");link.href=v.pageURL;link.target="_blank";link.rel="noopener";link.textContent="Source / contributor";const pick=document.createElement("button");pick.textContent="Use preview for thumbnail";pick.onclick=()=>{chosenImage=v.thumbnail||"";$("assetStatus").textContent="Selected preview background. Generate thumbnail below.";};card.append(video,meta,link,pick);$("assets").append(card);}
+ }catch(e){$("assetStatus").textContent=" Error: "+e.message;}finally{b.disabled=false;b.textContent="Search Pixabay footage";}
+};
+window.makeThumbnail=()=>{
+ const canvas=$("thumbCanvas"),ctx=canvas.getContext("2d"),file=$("thumbImage").files?.[0],headline=$("thumbText").value.trim()||"WATCH NOW";
+ const draw=(img)=>{ctx.drawImage(img,0,0,1280,720);const g=ctx.createLinearGradient(0,250,0,720);g.addColorStop(0,"rgba(0,0,0,0.05)");g.addColorStop(1,"rgba(0,0,0,0.88)");ctx.fillStyle=g;ctx.fillRect(0,0,1280,720);ctx.fillStyle="#00d9ff";ctx.fillRect(70,545,12,105);ctx.fillStyle="#fff";ctx.font="900 78px Arial";ctx.textBaseline="top";const words=headline.split(/\s+/);let lines=[],line="";for(const w of words){const test=line?line+" "+w:w;if(ctx.measureText(test).width>1040&&line){lines.push(line);line=w;}else line=test;}if(line)lines.push(line);lines.slice(0,2).forEach((l,i)=>ctx.fillText(l,110,540+i*88));ctx.font="bold 28px Arial";ctx.fillStyle="#6ceaff";ctx.fillText("RAAHI MOTION",110,675);};
+ if(file){const img=new Image();img.onload=()=>draw(img);img.src=URL.createObjectURL(file);}else if(chosenImage){const img=new Image();img.crossOrigin="anonymous";img.onload=()=>draw(img);img.onerror=()=>{ctx.fillStyle="#09243a";ctx.fillRect(0,0,1280,720);ctx.fillStyle="#fff";ctx.font="bold 64px Arial";ctx.fillText(headline,80,500);};img.src=chosenImage;}else{ctx.fillStyle="#09243a";ctx.fillRect(0,0,1280,720);ctx.fillStyle="#fff";ctx.font="bold 72px Arial";ctx.fillText(headline.slice(0,24),80,500);ctx.font="bold 30px Arial";ctx.fillText("RAAHI MOTION",80,620);}
+};
+window.downloadThumbnail=()=>{const a=document.createElement("a");a.download="raahi-motion-thumbnail.png";a.href=$("thumbCanvas").toDataURL("image/png");a.click();};
+init().catch(()=> $("login").classList.remove("hidden"));
+</script></body></html>
